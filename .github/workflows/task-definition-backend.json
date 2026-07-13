@@ -22,6 +22,10 @@
         {
           "name": "DB_NAME",
           "value": "rag_voice_agent_db"
+        },
+        {
+          "name": "FORCE_SECURE_WEBSOCKET",
+          "value": "true"
         }
       ],
       "secrets": [

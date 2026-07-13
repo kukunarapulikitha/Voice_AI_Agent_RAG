@@ -71,7 +71,7 @@ async def bot_connect(request: Request) -> Dict[str, Any]:
 
     is_behind_alb = ".elb.amazonaws.com" in host or ".elb." in host
 
-    if scheme == "https":
+    if settings.FORCE_SECURE_WEBSOCKET or scheme == "https":
         ws_scheme="wss"
     else:
         ws_scheme="ws"

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
 
     #Hard Coded
     USER_ID: str = "mvp_user"
+
+    # Force wss:// for the WebSocket URL even when the app sees http at the
+    # origin (e.g. behind CloudFront -> ALB where TLS terminates at CloudFront).
+    FORCE_SECURE_WEBSOCKET: bool = False
     
     class Config:
         env_file = ".env"
