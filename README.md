@@ -14,7 +14,7 @@ conversation. The exact source passages it used are shown on screen for verifica
 ## 📽️ Demo
 
 <!-- Replace the link below with your Loom video / add screenshots to a /docs/screenshots folder -->
-- **Video walkthrough:** [Loom link here](#)
+- **Video walkthrough:** [https://drive.google.com/file/d/1NMSi_mIqbbNVjrxt4LCCP3OhdtTHPUp0/view?usp=sharing](#)
 - **Screenshots:**
 
 | Live conversation | Retrieved source chunks |
