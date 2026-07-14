@@ -16,10 +16,8 @@ conversation. The exact source passages it used are shown on screen for verifica
 <!-- Replace the link below with your Loom video / add screenshots to a /docs/screenshots folder -->
 - **Video walkthrough:** [https://drive.google.com/file/d/1NMSi_mIqbbNVjrxt4LCCP3OhdtTHPUp0/view?usp=sharing](#)
 - **Screenshots:**
+<img width="1470" height="956" alt="image" src="https://github.com/user-attachments/assets/54124e44-6c15-42f7-9d2a-65d5030322dc" />
 
-| Live conversation | Retrieved source chunks |
-|---|---|
-| _screenshot_ | _screenshot_ |
 
 ---
 
