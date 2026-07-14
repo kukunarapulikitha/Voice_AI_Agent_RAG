@@ -300,10 +300,97 @@ I designed this in three layers, building bottom-up:
 
 ---
 
-## ☁️ Production Deployment
+## ☁️ Production Deployment (AWS)
 
-Full AWS deployment (ECS Fargate + ALB via CloudFormation and GitHub Actions CI/CD) is
-documented in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+The app runs live on AWS — **voice + RAG over HTTPS**. Below is how a single request flows
+through the AWS services. Full step-by-step setup is in **[DEPLOYMENT.md](DEPLOYMENT.md)**;
+a demo walkthrough is in **[demo/DEMO_SCRIPT_AWS.md](demo/DEMO_SCRIPT_AWS.md)**.
+
+**Live URL:** `https://d1bg5xiotm8bsj.cloudfront.net`
+
+### AWS cloud architecture & request flow
+
+```
+                          🎧 Browser (mic + audio, HTTPS + wss required)
+                                          │
+                                          │  ① HTTPS / secure WebSocket (wss)
+                                          ▼
+        ┌───────────────────────────────────────────────────────────────┐
+        │  Amazon CloudFront  (verified account — cross-account)          │
+        │  • terminates TLS → gives the browser HTTPS + wss (mic needs it)│
+        │  • CachingDisabled, AllViewer, redirect-to-https                │
+        └───────────────────────────────┬───────────────────────────────┘
+                                         │  ② forwards to origin (HTTP:80)
+                                         ▼
+   ══════════════════════ AWS Account 517293881958 · us-east-1 ══════════════════════
+        ┌───────────────────────────────────────────────────────────────┐
+        │  VPC                                                            │
+        │                                                                 │
+        │   Public subnets                                                │
+        │   ┌───────────────────────────────────────────────────────┐    │
+        │   │  Application Load Balancer (internet-facing, HTTP:80)   │    │
+        │   │  path routing:  /api/*  → backend   ·   /*  → frontend  │    │
+        │   └───────────┬───────────────────────────────┬───────────┘    │
+        │      ③ /api/* │                         /*    │                 │
+        │   Private subnets (no public IP)              │                 │
+        │   ┌───────────▼───────────┐        ┌──────────▼────────────┐    │
+        │   │ ECS Fargate: BACKEND  │        │ ECS Fargate: FRONTEND │    │
+        │   │ FastAPI + Pipecat     │        │ React + Vite (nginx)  │    │
+        │   │ Deepgram→Groq→11Labs  │        └───────────────────────┘    │
+        │   └───┬───────────┬───────┘                                     │
+        │       │           │  image pull        secrets @ startup        │
+        │       │           └─────────► Amazon ECR                        │
+        │       │           └─────────► AWS Secrets Manager (API keys,    │
+        │       │  ④ egress                 Mongo URL) via IAM exec role   │
+        │       │  via NAT Gateway ──► internet          logs ─► CloudWatch│
+        └───────┼─────────────────────────────────────────────────────────┘
+                │  ⑤ Gemini embedding + $vectorSearch (TLS)
+                ▼
+        MongoDB Atlas — Vector Search  (external, 768-dim `vector_index`)
+        document_chunks + equipment
+
+   ────────────────────────────────────────────────────────────────────────────
+   CI/CD:  git push main ─► GitHub Actions ─► build image ─► push to ECR
+                          └─► register task def ─► update ECS service (rolling deploy)
+
+   Infra-as-code:  everything inside the VPC box (VPC, subnets, NAT, ALB, ECS
+                   cluster, IAM roles) is created by CloudFormation (`rag-voice-agent-stack`).
+```
+
+**Cloud request lifecycle**
+
+1. **Browser → CloudFront (①):** the page loads over HTTPS and opens a `wss://` WebSocket.
+   The browser *only* allows microphone access and secure WebSockets on an HTTPS origin, so
+   CloudFront is what makes voice work. It terminates TLS. (It lives in a separate *verified*
+   AWS account and points cross-account at the ALB, because the primary account wasn't
+   CloudFront-verified.)
+2. **CloudFront → ALB (②):** CloudFront forwards to its origin, the internet-facing
+   Application Load Balancer (HTTP:80) in the main account's VPC.
+3. **ALB → ECS Fargate (③):** the ALB routes by path — `/api/*` to the **backend** service,
+   everything else to the **frontend** service. Both run as serverless Fargate tasks in
+   **private subnets** (no public IP).
+4. **Backend supporting services (④):** the task pulls its image from **ECR**, loads API
+   keys + the Mongo connection string from **Secrets Manager** via its IAM execution role,
+   streams logs to **CloudWatch**, and reaches the internet (Deepgram/Groq/ElevenLabs/Gemini)
+   through a **NAT Gateway**.
+5. **Backend → MongoDB Atlas (⑤):** the RAG step embeds the query with **Gemini** and runs an
+   Atlas `$vectorSearch` against the 768-dim `vector_index` — the retrieval that grounds the
+   answer.
+
+**Why each AWS service is here**
+
+| Service | Role in this deployment |
+|---|---|
+| **CloudFront** | HTTPS front door — required for mic access + `wss://`; terminates TLS. |
+| **Application Load Balancer** | Path routing: `/api/*` → backend, `/*` → frontend; health checks. |
+| **ECS Fargate** | Runs both containers serverless — no EC2 to manage or patch. |
+| **ECR** | Stores the Docker images the Fargate tasks pull. |
+| **VPC / private subnets / NAT Gateway** | Tasks have no public IP; outbound internet via NAT only. |
+| **Secrets Manager** | API keys + Mongo URL injected at runtime — never in the repo/image. |
+| **CloudWatch Logs** | Backend/pipeline logs — how the cloud deployment was debugged. |
+| **CloudFormation** | Whole stack as code (`rag-voice-agent-stack`); reproducible, one-command teardown. |
+| **GitHub Actions** | CI/CD — push to `main` → build → ECR → rolling ECS deploy. |
+| **MongoDB Atlas Vector Search** | External retrieval layer — Gemini embeddings + `vector_index`. |
 
 ---
 
